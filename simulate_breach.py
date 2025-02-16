@@ -15,7 +15,7 @@ import breaching
 
 import os
 
-os.environ["HYDRA_FULL_ERROR"] = "0"
+os.environ["HYDRA_FULL_ERROR"] = "1"
 log = logging.getLogger(__name__)
 
 

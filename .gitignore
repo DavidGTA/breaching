@@ -6,6 +6,7 @@ tables/*.csv#
 tables/*.ods
 
 .vs/
+.idea/
 
 *.pdf
 images
