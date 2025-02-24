@@ -2,7 +2,7 @@ name: Birdsnap
 modality: vision
 task: classification
 
-path: "~/data"
+path: "~/nas/ZhuZhu/data"
 size: 49829
 classes: 500
 shape:

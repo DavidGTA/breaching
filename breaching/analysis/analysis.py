@@ -44,11 +44,14 @@ def report(
             cfg_case,
             setup,
         )
+    # 检查 vocab_size 是否存在
+    vocab_size = getattr(cfg_case.data, "vocab_size", None)
+
     if reconstructed_user_data["labels"] is not None:
         test_label_acc = count_integer_overlap(
             reconstructed_user_data["labels"].view(-1),
             true_user_data["labels"].view(-1),
-            maxlength=cfg_case.data.vocab_size,
+            maxlength=vocab_size if vocab_size is not None else 0,  # 仅在 NLP 任务中使用 vocab_size
         ).item()
     else:
         test_label_acc = 0
@@ -69,13 +72,13 @@ def report(
                     for buffer, user_state in zip(model.buffers(), true_user_data["buffers"]):
                         buffer.copy_(user_state.to(**setup))
 
-            # Compute the forward passes
+            # 计算前向传播
             feats_rec = model(reconstructed_user_data["data"].to(device=setup["device"]))
             feats_true = model(true_user_data["data"].to(device=setup["device"]))
             relevant_features = true_user_data["labels"]
             feat_mse += (feats_rec - feats_true)[..., relevant_features.view(-1)].pow(2).mean().item()
 
-    # Record model parameters:
+    # 记录模型参数
     parameters = sum([p.numel() for p in model.parameters()])
 
     if metadata["modality"] == "text":

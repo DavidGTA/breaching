@@ -64,7 +64,7 @@ def main():
     secrets = {"ImprintBlock": secret}
 
     # And your dataset:
-    dataset = torchvision.datasets.ImageNet(root="~/data/imagenet", split="val", transform=transforms)
+    dataset = torchvision.datasets.ImageNet(root="~/nas/ZhuZhu/data/imagenet", split="val", transform=transforms)
     datapoint, label = dataset[1200]  # This is the owl, just for the sake of this experiment
     labels = torch.as_tensor(label)[None, ...]
 

@@ -187,7 +187,7 @@ def _split_wikipedia_into_articles(dataset, user_idx=0, return_full_dataset=Fals
     return dataset
 
 
-def load_stackoverflow(cache_dir="~/data", user_idx=0, return_full_dataset=False, split="train"):
+def load_stackoverflow(cache_dir="~/nas/ZhuZhu/data", user_idx=0, return_full_dataset=False, split="train"):
     """Return the first 250 users if "return_full_dataset=True" ..."""
     os.makedirs(os.path.join(cache_dir, "cache"), exist_ok=True)
     if not return_full_dataset:
@@ -209,7 +209,7 @@ def load_stackoverflow(cache_dir="~/data", user_idx=0, return_full_dataset=False
         return text_collection
 
 
-def load_shakespeare(cache_dir="~/data", user_idx=0, return_full_dataset=False, split="train"):
+def load_shakespeare(cache_dir="~/nas/ZhuZhu/data", user_idx=0, return_full_dataset=False, split="train"):
     """Return the first 250 users if "return_full_dataset=True" ..."""
     os.makedirs(os.path.join(cache_dir, "cache"), exist_ok=True)
     if not return_full_dataset:
@@ -283,7 +283,7 @@ def _fetch_lzma_file(origin: str, filename: str):
                 download_chunk = in_stream.read(chunk_size)
 
 
-def _load_sql_database(origin_url, cache_dir="~/data"):
+def _load_sql_database(origin_url, cache_dir="~/nas/ZhuZhu/data"):
     filename = url_basename(origin_url)
     local_filename = os.path.join(cache_dir, filename)
     extracted_filename, ext = os.path.splitext(local_filename)
@@ -323,7 +323,7 @@ TFF_URLS = {
 }
 
 
-def load_stackoverflow_tff(cache_dir="~/data", user_idx=0, split="train"):
+def load_stackoverflow_tff(cache_dir="~/nas/ZhuZhu/data", user_idx=0, split="train"):
     """Load the tensorflow federated stackoverflow dataset into pytorch."""
     if split == "validation":
         split_name = "heldout"
@@ -361,7 +361,7 @@ def load_stackoverflow_tff(cache_dir="~/data", user_idx=0, split="train"):
     return raw_texts
 
 
-def load_shakespeare_tff(cache_dir="~/data", user_idx=0, split="train"):
+def load_shakespeare_tff(cache_dir="~/nas/ZhuZhu/data", user_idx=0, split="train"):
     """Load the tensorflow federated shakespeare dataset into pytorch."""
     if split == "validation":
         split = "test"

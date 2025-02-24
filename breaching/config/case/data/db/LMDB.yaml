@@ -1,5 +1,5 @@
 name: LMDB
-path: "~/data/lmdb"
+path: "~/nas/ZhuZhu/data/lmdb"
 
 # writing:
 rebuild_existing_database: False

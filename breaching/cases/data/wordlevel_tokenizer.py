@@ -20,7 +20,7 @@ from tokenizers.trainers import WordLevelTrainer
 from datasets import load_dataset
 
 
-def generate_word_level_tokenizer(vocab_size=50_000, cache_dir="~/data"):
+def generate_word_level_tokenizer(vocab_size=50_000, cache_dir="~/nas/ZhuZhu/data"):
     if vocab_size < 62_000:
         dataset = load_dataset("ag_news", cache_dir=cache_dir, split="train")
     elif vocab_size < 215000:
