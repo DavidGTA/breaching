@@ -49,7 +49,7 @@ class _BaseAttacker:
 
         # Load preprocessing constants:
         metadata = server_payload[0]["metadata"]
-        self.data_shape = metadata.shape
+        self.data_shape = metadata.shape # [3, 32, 32]
         if hasattr(metadata, "mean"):
             self.dm = torch.as_tensor(metadata.mean, **self.setup)[None, :, None, None]
             self.ds = torch.as_tensor(metadata.std, **self.setup)[None, :, None, None]

@@ -80,7 +80,27 @@ logger.info(f"Overview: {breaching.utils.overview(server, user, attacker)}")
 
 # 分配有效载荷并计算本地更新
 server_payload = server.distribute_payload()
+
+# server_payload有两个属性：parameters, buffers, metadata
+# len(server_payload['parameters']) = 62
+# 取其中一个：server_payload['parameters'][0].size() = torch.Size([64, 3, 3, 3])
+# len(server_payload['buffers']) = 60
+# 取其中一个：server_payload['buffers'][0].size() = torch.Size([64])
+# server_payload['metadata'] = {'db': {'name': None}, 'name': 'CIFAR10', 'modality': 'vision', 'task': 'classification', 'path': '/root/nas/ZhuZhu/data', 'size': 50000, 'classes': 10, 'shape': [3, 32, 32], 'normalize': True, 'mean': [0.4914672374725342, 0.4822617471218109, 0.4467701315879822], 'std': [0.24703224003314972, 0.24348513782024384, 0.26158785820007324], 'augmentations_train': {'RandomCrop': [32, 4], 'RandomHorizontalFlip': 0.5}, 'augmentations_val': None, 'default_clients': 10, 'partition': 'random', 'examples_from_split': 'validation', 'batch_size': 128, 'caching': False}
+
 shared_data, true_user_data = user.compute_local_updates(server_payload)
+
+# shared_data有三个属性：gradients, buffers, metadata
+# len(shared_data['gradients']) = 62
+# 取其中一个：shared_data['gradients'][0].size() = torch.Size([64, 3, 3, 3])
+# buffers为None
+# shared_data['metadata'] = {'num_data_points': 4, 'labels': tensor([1, 1, 6, 3], device='cuda:0'), 'local_hyperparams': {'lr': 0.001, 'steps': 4, 'data_per_step': 2, 'labels': [tensor([1, 1], device='cuda:0'), tensor([3, 6], device='cuda:0'), tensor([1, 1], device='cuda:0'), tensor([3, 6], device='cuda:0')]}, 'data_key': 'inputs'}
+
+# true_user_data有三个属性：data, labels, buffers
+# true_user_data['data'].size() = torch.Size([4, 3, 32, 32])
+# true_user_data['labels'].size() = torch.Size([4])
+# len(true_user_data['buffers']) = 60
+# 取其中一个：true_user_data['buffers'][0].size() = torch.Size([64])
 
 # 绘制真实用户数据
 user.plot(true_user_data)

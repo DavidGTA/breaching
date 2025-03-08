@@ -301,6 +301,205 @@ return models
 
 ---
 
+### **函数解析：**
+这两个函数的主要作用是：
+1. **`_construct_models_from_payload_and_buffers`**  
+   - 作用：基于服务器提供的 `server_payload` 及客户端的 `shared_data` **构造恢复模型**，并加载 `parameters`（参数）和 `buffers`（缓冲区）。
+   - 适用于：恢复 **服务器模型副本** 以执行攻击，例如梯度反演攻击（Gradient Inversion Attack）。
+
+2. **`_cast_shared_data`**  
+   - 作用：将 `shared_data`（梯度信息）转换为适当的数据类型（`dtype`）。
+   - 适用于：确保梯度和缓冲区数据的格式一致，以便后续计算。
+
+---
+
+## **1. `_construct_models_from_payload_and_buffers` 解析**
+```python
+def _construct_models_from_payload_and_buffers(self, server_payload, shared_data):
+    """Construct the model (or multiple) that is sent by the server and include user buffers if any."""
+```
+该函数的目的是 **构造多个副本模型**（可能针对不同用户或不同攻击尝试），并填充服务器发送的 `parameters` 和 `buffers` 进行 **梯度攻击**。
+
+---
+
+### **(1) 初始化模型列表**
+```python
+models = []
+for idx, payload in enumerate(server_payload):
+```
+- `models = []`：用于存储多个副本模型。
+- 遍历 `server_payload`，为每个 `payload` **创建一个模型副本**。
+
+---
+
+### **(2) 创建新的模型副本**
+```python
+new_model = copy.deepcopy(self.model_template)
+new_model.to(**self.setup, memory_format=self.memory_format)
+```
+- **`copy.deepcopy(self.model_template)`**
+  - `self.model_template` 是一个 **模板模型**，表示服务器模型的结构。
+  - 使用 `deepcopy` 确保每个 `new_model` 是独立的副本，避免共享参数。
+
+- **`new_model.to(**self.setup, memory_format=self.memory_format)`**
+  - `self.setup` 可能包含：
+    - `device`（CPU/GPU）。
+    - `dtype`（`float32/float16/bfloat16`）。
+  - `memory_format` 可能用于 **优化 GPU 内存布局**（如 `channels_last`）。
+
+---
+
+### **(3) 选择 `parameters` 和 `buffers`**
+```python
+parameters = payload["parameters"]
+if shared_data[idx]["buffers"] is not None:
+    buffers = shared_data[idx]["buffers"]
+    new_model.eval()
+elif payload["buffers"] is not None:
+    buffers = payload["buffers"]
+    new_model.eval()
+else:
+    new_model.train()
+    for module in new_model.modules():
+        if hasattr(module, "track_running_stats"):
+            module.reset_parameters()
+            module.track_running_stats = False
+    buffers = []
+```
+- **`parameters = payload["parameters"]`**  
+  - 服务器提供的 **模型参数（权重）**。
+  
+- **如何选择 `buffers`**：
+  - 如果客户端 `shared_data` 提供了 `buffers`，使用客户端的 `buffers`。
+  - 否则，如果服务器 `payload` 提供了 `buffers`，使用服务器的 `buffers`。
+  - **都没有 `buffers`**：
+    - 设定 `new_model` 为 **训练模式**（`train()`）。
+    - **重置 `BatchNorm` 或 `LayerNorm`**：
+      - `module.reset_parameters()` 重新初始化。
+      - `module.track_running_stats = False` 关闭统计。
+
+---
+
+### **(4) 加载 `parameters` 和 `buffers`**
+```python
+with torch.no_grad():
+    for param, server_state in zip(new_model.parameters(), parameters):
+        param.copy_(server_state.to(**self.setup))
+    for buffer, server_state in zip(new_model.buffers(), buffers):
+        buffer.copy_(server_state.to(**self.setup))
+```
+- 使用 `torch.no_grad()` 以避免梯度计算，加快拷贝。
+- **加载 `parameters`**：
+  - `param.copy_(server_state.to(**self.setup))` **覆盖模型参数**。
+- **加载 `buffers`**：
+  - 如果 `buffers` 为空，则不进行拷贝。
+
+---
+
+### **(5) 处理 JIT 编译**
+```python
+if self.cfg.impl.JIT == "script":
+    example_inputs = self._initialize_data((1, *self.data_shape))
+    new_model = torch.jit.script(new_model, example_inputs=[(example_inputs,)])
+elif self.cfg.impl.JIT == "trace":
+    example_inputs = self._initialize_data((1, *self.data_shape))
+    new_model = torch.jit.trace(new_model, example_inputs=example_inputs)
+```
+- **支持 JIT（Just-In-Time）编译优化**：
+  - `torch.jit.script(model)`：使用 **Script 编译**（适用于控制流较多的模型）。
+  - `torch.jit.trace(model, example_inputs)`：使用 **Trace 编译**（适用于固定结构的模型）。
+- `self._initialize_data((1, *self.data_shape))`
+  - 可能是 **生成示例输入数据**（你需要提供 `_initialize_data` 代码）。
+
+---
+
+### **(6) 存储并返回模型**
+```python
+models.append(new_model)
+return models
+```
+- **存储多个模型副本**，可能用于 **不同数据、不同攻击目标**。
+- **返回** `models`。
+
+---
+
+## **2. `_cast_shared_data` 解析**
+```python
+def _cast_shared_data(self, shared_data):
+    """Cast user data to reconstruction data type."""
+```
+该函数的目的是 **调整 `shared_data` 的数据类型**，确保梯度和 `buffers` 的 `dtype` **一致**。
+
+---
+
+### **(1) 遍历 `shared_data`**
+```python
+for data in shared_data:
+```
+- `shared_data` 是一个 **列表**，每个元素可能对应一个客户端的梯度信息。
+
+---
+
+### **(2) 转换 `gradients` 的数据类型**
+```python
+data["gradients"] = [g.to(dtype=self.setup["dtype"]) for g in data["gradients"]]
+```
+- **遍历梯度 `gradients`** 并转换为 `self.setup["dtype"]`（如 `float32/float16/bfloat16`）。
+- **目的**：
+  - 保证计算精度一致，减少数值误差。
+
+---
+
+### **(3) 转换 `buffers` 的数据类型**
+```python
+if data["buffers"] is not None:
+    data["buffers"] = [b.to(dtype=self.setup["dtype"]) for b in data["buffers"]]
+```
+- **如果 `buffers` 存在**，则转换为相同 `dtype`。
+- **目的**：
+  - 确保 `buffers` 和 `gradients` 类型一致，防止计算错误。
+
+---
+
+### **(4) 返回转换后的 `shared_data`**
+```python
+return shared_data
+```
+- 经过数据类型转换后返回 `shared_data`。
+
+---
+
+## **3. 总结**
+### **`_construct_models_from_payload_and_buffers`**
+- **作用**：
+  - 从 `server_payload` 构造模型副本，并加载 `parameters` 和 `buffers`。
+  - **支持 JIT 编译** 以加速计算（如果 `cfg.impl.JIT` 启用）。
+- **关键点**：
+  - **选择正确的 `buffers`**（客户端提供优先，其次是服务器）。
+  - **是否启用 `BatchNorm` 统计参数**（`track_running_stats=False`）。
+  - **JIT 编译加速**（`script` vs `trace`）。
+
+---
+
+### **`_cast_shared_data`**
+- **作用**：
+  - 确保 `shared_data`（梯度、buffers）转换为 **统一的数据类型**。
+- **关键点**：
+  - **确保梯度 (`gradients`) 和 `buffers` 的数据类型一致**，避免计算误差。
+  - **如果 `buffers` 为空，则跳过转换**。
+
+---
+
+## **4. 这些函数在 `prepare_attack` 中的作用**
+- **`_construct_models_from_payload_and_buffers(server_payload, shared_data)`**
+  - **在 `prepare_attack` 中创建 `rec_models`**，用于梯度恢复攻击。
+- **`_cast_shared_data(shared_data)`**
+  - **确保 `shared_data`（梯度等）格式统一**，避免后续计算问题。
+
+这两个函数是 **攻击准备的核心**，确保梯度恢复过程中的模型和数据格式正确。
+
+---
+
 ### `_cast_shared_data` 方法
 
 ```python
@@ -342,3 +541,4 @@ def _normalize_gradients(self, shared_data, fudge_factor=1e-6):
 - **优化与标准化**：提供梯度的规范化和优化器的初始化功能。
 
 每个子类可以根据需要覆盖`reconstruct`和`__repr__`方法，定义具体的攻击逻辑。
+

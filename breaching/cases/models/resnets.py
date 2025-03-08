@@ -144,6 +144,27 @@ class ResNet(torch.nn.Module):
                 elif isinstance(m, BasicBlock):
                     if hasattr(m.bn2, "weight"):
                         torch.nn.init.constant_(m.bn2.weight, 0)
+                        
+    def __repr__(self):
+        parameters_info = "\n".join([f"    {name}: {param.shape}, requires_grad={param.requires_grad}" for name, param in self.named_parameters()])
+        buffers_info = "\n".join([f"    {name}: {buf.shape}" for name, buf in self.named_buffers()])
+        return (f"{self.__class__.__name__}("
+                f"  layers={self.layers},"
+                f"  channels={self.stem[0].in_channels if hasattr(self.stem[0], 'in_channels') else 'Unknown'},"
+                f"  classes={self.linear.out_features if hasattr(self, 'linear') else 'Unknown'},"
+                f"  zero_init_residual={getattr(self, 'zero_init_residual', 'Unknown')},"
+                f"  strides={getattr(self, 'strides', 'Unknown')},"
+                f"  groups={getattr(self, 'groups', 'Unknown')},"
+                f"  width_per_group={getattr(self, 'base_width', 'Unknown')},"
+                f"  replace_stride_with_dilation={getattr(self, 'replace_stride_with_dilation', 'Unknown')},"
+                f"  norm={self._norm_layer.__name__ if hasattr(self._norm_layer, '__name__') else str(self._norm_layer)},"
+                f"  nonlin={self._nonlin_layer.__name__ if hasattr(self._nonlin_layer, '__name__') else str(self._nonlin_layer)},"
+                f"  stem={self.stem},"
+                f"  downsample={getattr(self, 'downsample', 'Unknown')},"
+                f"  convolution_type={self._conv_layer.__name__ if hasattr(self._conv_layer, '__name__') else str(self._conv_layer)},"
+                f"  parameters=\n{parameters_info if parameters_info else 'None'},"
+                f"  buffers=\n{buffers_info if buffers_info else 'None'}"
+                f")")
 
     def _make_layer(self, block, planes, blocks, stride=1, dilate=False, downsample="B"):
         conv_layer = self._conv_layer

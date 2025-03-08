@@ -224,6 +224,28 @@ class UserSingleStep(torch.nn.Module):
                 device=setup["device"]
             )
         self.data_key = "input_ids" if "input_ids" in data.keys() else "inputs"
+
+        # 例如有三个数据块在data_blocks中，要求的num_data_points为5
+        # {
+        #     "inputs": torch.tensor([[1, 2], [3, 4]]),
+        #     "labels": torch.tensor([0, 1])
+        # }
+        # {
+        #     "inputs": torch.tensor([[5, 6], [7, 8]]),
+        #     "labels": torch.tensor([2, 3])
+        # }
+        # {
+        #     "inputs": torch.tensor([[9, 10], [11, 12]]),
+        #     "labels": torch.tensor([4, 5])
+        # }
+        # 生成的 data 为
+        # data["inputs"] = torch.cat([d["inputs"] for d in data_blocks], dim=0)[:5].to(device=setup["device"])
+        # data["labels"] = torch.cat([d["labels"] for d in data_blocks], dim=0)[:5].to(device=setup["device"])
+        # {
+        #     "inputs": torch.tensor([[1, 2], [3, 4], [5, 6], [7, 8], [9, 10]]),
+        #     "labels": torch.tensor([0, 1, 2, 3, 4])
+        # }
+        
         return data
 
     def print(self, user_data, **kwargs):
@@ -265,19 +287,75 @@ class UserSingleStep(torch.nn.Module):
                 print(bg_color(decoded_token + " ", token == gt_token), end="")
             print("\n")
 
-    def plot(self, user_data, scale=False, print_labels=False):
-        """Plot user data to output. Probably best called from a jupyter notebook."""
-        import matplotlib.pyplot as plt  # lazily import this here
+    # def plot(self, user_data, scale=False, print_labels=False):
+    #     """Plot user data to output. Probably best called from a jupyter notebook."""
+    #     import matplotlib.pyplot as plt  # lazily import this here
 
+    #     dm = torch.as_tensor(self.dataloader.dataset.mean, **self.setup)[None, :, None, None]
+    #     ds = torch.as_tensor(self.dataloader.dataset.std, **self.setup)[None, :, None, None]
+    #     classes = self.dataloader.dataset.classes
+
+    #     data = user_data["data"].clone().detach()
+    #     labels = user_data["labels"].clone().detach() if user_data["labels"] is not None else None
+    #     if labels is None:
+    #         print_labels = False
+
+    #     if scale:
+    #         min_val, max_val = data.amin(dim=[2, 3], keepdim=True), data.amax(dim=[2, 3], keepdim=True)
+    #         # print(f'min_val: {min_val} | max_val: {max_val}')
+    #         data = (data - min_val) / (max_val - min_val)
+    #     else:
+    #         data.mul_(ds).add_(dm).clamp_(0, 1)
+    #     data = data.to(dtype=torch.float32)
+
+    #     if data.shape[0] == 1:
+    #         plt.axis("off")
+    #         plt.imshow(data[0].permute(1, 2, 0).cpu())
+    #         if print_labels:
+    #             plt.title(f"Data with label {classes[labels]}")
+    #     else:
+    #         grid_shape = int(torch.as_tensor(data.shape[0]).sqrt().ceil())
+    #         s = 24 if data.shape[3] > 150 else 6
+    #         fig, axes = plt.subplots(grid_shape, grid_shape, figsize=(s, s))
+    #         label_classes = []
+    #         for i, (im, axis) in enumerate(zip(data, axes.flatten())):
+    #             axis.imshow(im.permute(1, 2, 0).cpu())
+    #             if labels is not None and print_labels:
+    #                 label_classes.append(classes[labels[i]])
+    #             axis.axis("off")
+    #         if print_labels:
+    #             print(label_classes)
+
+
+    def plot(self, user_data, scale=False, print_labels=False, save_path=None):
+        """
+        Plot user data in a standard Python environment.
+
+        Args:
+            user_data (dict): Contains `data` and optionally `labels`.
+            dataloader: The data loader providing dataset metadata.
+            setup (dict): Dictionary containing device and dtype information.
+            scale (bool): Whether to scale the images to [0,1].
+            print_labels (bool): Whether to print label names.
+            save_path (str, optional): Path to save the figure. If None, the figure is displayed.
+
+        Returns:
+            list: Label classes (if print_labels is True).
+        """
+        import matplotlib.pyplot as plt
+
+        # Convert dataset normalization parameters to tensors
         dm = torch.as_tensor(self.dataloader.dataset.mean, **self.setup)[None, :, None, None]
         ds = torch.as_tensor(self.dataloader.dataset.std, **self.setup)[None, :, None, None]
         classes = self.dataloader.dataset.classes
 
+        # Extract data and labels
         data = user_data["data"].clone().detach()
         labels = user_data["labels"].clone().detach() if user_data["labels"] is not None else None
         if labels is None:
             print_labels = False
 
+        # Normalize or scale the data
         if scale:
             min_val, max_val = data.amin(dim=[2, 3], keepdim=True), data.amax(dim=[2, 3], keepdim=True)
             # print(f'min_val: {min_val} | max_val: {max_val}')
@@ -286,12 +364,14 @@ class UserSingleStep(torch.nn.Module):
             data.mul_(ds).add_(dm).clamp_(0, 1)
         data = data.to(dtype=torch.float32)
 
-        if data.shape[0] == 1:
+        # Plot the data
+        if data.shape[0] == 1:  # Single image case
+            plt.figure(figsize=(6, 6))
             plt.axis("off")
             plt.imshow(data[0].permute(1, 2, 0).cpu())
             if print_labels:
-                plt.title(f"Data with label {classes[labels]}")
-        else:
+                plt.title(f"Data with label {classes[labels.item()]}")
+        else:  # Multiple images case
             grid_shape = int(torch.as_tensor(data.shape[0]).sqrt().ceil())
             s = 24 if data.shape[3] > 150 else 6
             fig, axes = plt.subplots(grid_shape, grid_shape, figsize=(s, s))
@@ -299,11 +379,19 @@ class UserSingleStep(torch.nn.Module):
             for i, (im, axis) in enumerate(zip(data, axes.flatten())):
                 axis.imshow(im.permute(1, 2, 0).cpu())
                 if labels is not None and print_labels:
-                    label_classes.append(classes[labels[i]])
+                    label_classes.append(classes[labels[i].item()])
                 axis.axis("off")
-            if print_labels:
-                print(label_classes)
 
+            if print_labels:
+                print("Label classes:", label_classes)
+
+        # Save or show the plot
+        if save_path:
+            plt.savefig(save_path, bbox_inches='tight')
+            plt.close()
+        else:
+            plt.show()
+            
 
 class UserMultiStep(UserSingleStep):
     """A user who computes multiple local update steps as in a FedAVG scenario."""

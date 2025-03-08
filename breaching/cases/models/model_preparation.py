@@ -278,6 +278,7 @@ def _construct_vision_model(cfg_model, cfg_data, pretrained=True, **kwargs):
                 width_per_group=(16 if len(layers) < 4 else 64) * width,
                 zero_init_residual=False,
             )
+            print(model)
         elif "densenet" in cfg_model.lower():
             growth_rate, block_config, num_init_features = densenet_depths_to_config(
                 int("".join(filter(str.isdigit, cfg_model)))
